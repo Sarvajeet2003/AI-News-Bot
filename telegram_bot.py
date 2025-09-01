@@ -1,9 +1,8 @@
 import os
 import logging
 from datetime import datetime
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-from telegram.constants import ParseMode
+from telegram import Update, ParseMode
+from telegram.ext import Updater, CommandHandler, CallbackContext
 from ai_news_scraper import AINewsScraper
 from company_news_scraper import CompanyNewsScraper
 import schedule
@@ -31,7 +30,7 @@ class AINewsBot:
         if not self.bot_token:
             raise ValueError("TELEGRAM_BOT_TOKEN not found in environment variables")
     
-    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def start_command(self, update: Update, context: CallbackContext):
         """Handle /start command"""
         chat_id = update.effective_chat.id
         self.subscribers.add(chat_id)
@@ -50,22 +49,22 @@ Commands:
 You'll receive automatic updates every 6 hours with the latest AI advancements!
         """
         
-        await update.message.reply_text(welcome_message)
+        update.message.reply_text(welcome_message)
         logger.info(f"New subscriber: {chat_id}")
     
-    async def stop_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def stop_command(self, update: Update, context: CallbackContext):
         """Handle /stop command"""
         chat_id = update.effective_chat.id
         self.subscribers.discard(chat_id)
         
-        await update.message.reply_text(
+        update.message.reply_text(
             "You've been unsubscribed from AI updates. Use /start to subscribe again."
         )
         logger.info(f"Unsubscribed: {chat_id}")
     
-    async def latest_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def latest_command(self, update: Update, context: CallbackContext):
         """Handle /latest command"""
-        await update.message.reply_text("🔍 Scanning for latest AI advancements...")
+        update.message.reply_text("🔍 Scanning for latest AI advancements...")
         
         try:
             # Get both RSS news and company announcements with proper error handling
@@ -94,15 +93,15 @@ You'll receive automatic updates every 6 hours with the latest AI advancements!
             all_news = company_news + articles
             
             if not all_news:
-                await update.message.reply_text("No new AI product releases or announcements found in the last 48 hours.")
+                update.message.reply_text("No new AI product releases or announcements found in the last 48 hours.")
                 return
             
-            await update.message.reply_text(f"Found {len(all_news)} recent AI product releases & announcements:")
+            update.message.reply_text(f"Found {len(all_news)} recent AI product releases & announcements:")
             
             for article in all_news[:10]:  # Limit to 10 total
                 try:
                     message = self.scraper.format_article_message(article)
-                    await update.message.reply_text(
+                    update.message.reply_text(
                         message, 
                         parse_mode=ParseMode.HTML,
                         disable_web_page_preview=True
@@ -115,9 +114,9 @@ You'll receive automatic updates every 6 hours with the latest AI advancements!
                     
         except Exception as e:
             logger.error(f"Error in latest_command: {e}")
-            await update.message.reply_text("Sorry, there was an error fetching the latest news.")
+            update.message.reply_text("Sorry, there was an error fetching the latest news.")
     
-    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def help_command(self, update: Update, context: CallbackContext):
         """Handle /help command"""
         help_text = """
 🤖 AI Advancement Tracker Bot
@@ -138,9 +137,9 @@ Sources monitored:
 
 Updates are sent every 6 hours automatically to subscribers.
         """
-        await update.message.reply_text(help_text)
+        update.message.reply_text(help_text)
     
-    async def send_updates_to_subscribers(self):
+    def send_updates_to_subscribers(self):
         """Send updates to all subscribers"""
         if not self.subscribers:
             logger.info("No subscribers to send updates to")
@@ -177,12 +176,12 @@ Updates are sent every 6 hours automatically to subscribers.
             
             logger.info(f"Sending {len(all_news)} articles to {len(self.subscribers)} subscribers")
             
-            # Create application instance for sending messages
-            app = Application.builder().token(self.bot_token).build()
+            # Use the updater's bot instance
+            updater = Updater(token=self.bot_token, use_context=True)
             
             for chat_id in self.subscribers.copy():  # Use copy to avoid modification during iteration
                 try:
-                    await app.bot.send_message(
+                    updater.bot.send_message(
                         chat_id=chat_id,
                         text=f"🚨 {len(all_news)} new AI developments found!"
                     )
@@ -190,7 +189,7 @@ Updates are sent every 6 hours automatically to subscribers.
                     for article in all_news[:10]:  # Limit to 10
                         try:
                             message = self.scraper.format_article_message(article)
-                            await app.bot.send_message(
+                            updater.bot.send_message(
                                 chat_id=chat_id,
                                 text=message,
                                 parse_mode=ParseMode.HTML,
@@ -211,15 +210,7 @@ Updates are sent every 6 hours automatically to subscribers.
     
     def schedule_updates(self):
         """Schedule automatic updates"""
-        import asyncio
-        
-        def run_async_update():
-            try:
-                asyncio.run(self.send_updates_to_subscribers())
-            except Exception as e:
-                logger.error(f"Error in scheduled update: {e}")
-        
-        schedule.every(6).hours.do(run_async_update)
+        schedule.every(6).hours.do(self.send_updates_to_subscribers)
         
         while True:
             schedule.run_pending()
@@ -227,14 +218,15 @@ Updates are sent every 6 hours automatically to subscribers.
     
     def run(self):
         """Run the bot"""
-        # Create application
-        app = Application.builder().token(self.bot_token).build()
+        # Create updater
+        updater = Updater(token=self.bot_token, use_context=True)
+        dispatcher = updater.dispatcher
         
         # Add handlers
-        app.add_handler(CommandHandler("start", self.start_command))
-        app.add_handler(CommandHandler("stop", self.stop_command))
-        app.add_handler(CommandHandler("latest", self.latest_command))
-        app.add_handler(CommandHandler("help", self.help_command))
+        dispatcher.add_handler(CommandHandler("start", self.start_command))
+        dispatcher.add_handler(CommandHandler("stop", self.stop_command))
+        dispatcher.add_handler(CommandHandler("latest", self.latest_command))
+        dispatcher.add_handler(CommandHandler("help", self.help_command))
         
         # Start scheduler in background thread
         scheduler_thread = threading.Thread(target=self.schedule_updates, daemon=True)
@@ -243,7 +235,8 @@ Updates are sent every 6 hours automatically to subscribers.
         logger.info("Bot started successfully!")
         
         # Start the bot
-        app.run_polling(allowed_updates=Update.ALL_TYPES)
+        updater.start_polling()
+        updater.idle()
 
 if __name__ == "__main__":
     bot = AINewsBot()
