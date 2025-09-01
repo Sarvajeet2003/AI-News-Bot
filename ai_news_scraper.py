@@ -13,18 +13,26 @@ class AINewsScraper:
     def __init__(self):
         self.sources = {
             'techcrunch_ai': 'https://techcrunch.com/category/artificial-intelligence/feed/',
-            'venturebeat_ai': 'https://venturebeat.com/ai/feed/',
-            'the_verge_ai': 'https://www.theverge.com/ai-artificial-intelligence/rss/index.xml',
+            'venturebeat_ai': 'https://venturebeat.com/feed/',
+            'the_verge_ai': 'https://www.theverge.com/rss/index.xml',
             'ars_technica': 'https://feeds.arstechnica.com/arstechnica/technology-lab',
-            'ai_news': 'https://artificialintelligence-news.com/feed/',
+            'wired_ai': 'https://www.wired.com/feed/tag/ai/latest/rss',
+            'mit_tech_review': 'https://www.technologyreview.com/feed/',
         }
         self.seen_articles = set()
     
     def fetch_rss_feed(self, url):
         """Fetch and parse RSS feed"""
         try:
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-            response = requests.get(url, headers=headers, timeout=10)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
+            response = requests.get(url, headers=headers, timeout=15)
             response.raise_for_status()
             
             # Parse XML
@@ -134,7 +142,18 @@ class AINewsScraper:
             for source_name, url in self.sources.items():
                 logger.info(f"Fetching from {source_name}...")
                 try:
-                    entries = self.fetch_rss_feed(url)
+                    # Add retry mechanism
+                    entries = None
+                    for attempt in range(3):
+                        try:
+                            entries = self.fetch_rss_feed(url)
+                            break
+                        except Exception as e:
+                            if attempt == 2:  # Last attempt
+                                logger.error(f"Failed to fetch {source_name} after 3 attempts: {e}")
+                                entries = []
+                            else:
+                                time.sleep(2)  # Wait before retry
                     
                     # Ensure entries is iterable
                     if not entries or not isinstance(entries, list):
