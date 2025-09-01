@@ -57,29 +57,6 @@ The bot monitors these sources for AI product releases:
 - **The Verge**: AI product reviews and launches
 - **AI News**: Industry announcements and releases
 
-## Deployment Options
-
-### Free Hosting Options:
-
-1. **Railway** (Recommended)
-   - Connect your GitHub repo
-   - Add environment variables
-   - Deploy automatically
-
-2. **Heroku** (Free tier)
-   - Create a new app
-   - Connect GitHub repo
-   - Add config vars
-
-3. **PythonAnywhere** (Free tier)
-   - Upload files
-   - Set up scheduled tasks
-
-### VPS Options:
-- DigitalOcean ($5/month)
-- Linode ($5/month)
-- AWS EC2 (Free tier available)
-
 ## Contributing
 
 This is a free tool for the betterment of the world! Contributions welcome:
@@ -87,11 +64,6 @@ This is a free tool for the betterment of the world! Contributions welcome:
 1. Fork the repository
 2. Create a feature branch
 3. Submit a pull request
-
-## License
-
-MIT License - Free for everyone to use and modify.
-
 ## Support
 
 If you find this bot helpful, please share it with others who might benefit from staying updated on AI developments!
