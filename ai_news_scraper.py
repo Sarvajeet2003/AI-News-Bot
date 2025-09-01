@@ -1,9 +1,10 @@
 import requests
-import feedparser
+import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import time
 import logging
+import re
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,8 +23,47 @@ class AINewsScraper:
     def fetch_rss_feed(self, url):
         """Fetch and parse RSS feed"""
         try:
-            feed = feedparser.parse(url)
-            return feed.entries or []  # Ensure we always return a list
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            # Parse XML
+            root = ET.fromstring(response.content)
+            entries = []
+            
+            # Handle both RSS and Atom feeds
+            items = root.findall('.//item') or root.findall('.//{http://www.w3.org/2005/Atom}entry')
+            
+            for item in items:
+                entry = {}
+                
+                # Get title
+                title_elem = item.find('title') or item.find('.//{http://www.w3.org/2005/Atom}title')
+                entry['title'] = title_elem.text if title_elem is not None else ''
+                
+                # Get link
+                link_elem = item.find('link') or item.find('.//{http://www.w3.org/2005/Atom}link')
+                if link_elem is not None:
+                    entry['link'] = link_elem.text if link_elem.text else link_elem.get('href', '')
+                else:
+                    entry['link'] = ''
+                
+                # Get description/summary
+                desc_elem = (item.find('description') or 
+                           item.find('.//{http://www.w3.org/2005/Atom}summary') or
+                           item.find('.//{http://www.w3.org/2005/Atom}content'))
+                entry['summary'] = desc_elem.text if desc_elem is not None else ''
+                
+                # Get published date
+                pub_elem = (item.find('pubDate') or 
+                          item.find('.//{http://www.w3.org/2005/Atom}published') or
+                          item.find('.//{http://www.w3.org/2005/Atom}updated'))
+                entry['published'] = pub_elem.text if pub_elem is not None else ''
+                
+                entries.append(entry)
+            
+            return entries
+            
         except Exception as e:
             logger.error(f"Error fetching RSS from {url}: {e}")
             return []
@@ -31,15 +71,17 @@ class AINewsScraper:
     def is_recent(self, published_date, hours=24):
         """Check if article is from last N hours"""
         try:
-            if hasattr(published_date, 'tm_year'):
-                pub_time = datetime(*published_date[:6])
+            if isinstance(published_date, str):
+                # Try to parse common date formats
+                from dateutil import parser
+                pub_time = parser.parse(published_date)
             else:
                 return True  # If we can't parse date, include it
             
             cutoff = datetime.now() - timedelta(hours=hours)
-            return pub_time > cutoff
+            return pub_time.replace(tzinfo=None) > cutoff
         except:
-            return True
+            return True  # If we can't parse date, include it
     
     def extract_ai_keywords(self, text):
         """Check if content contains AI product/release keywords"""
@@ -101,7 +143,7 @@ class AINewsScraper:
                     for entry in entries:
                         try:
                             # Check if article is recent
-                            if hasattr(entry, 'published_parsed') and not self.is_recent(entry.published_parsed, hours):
+                            if entry.get('published') and not self.is_recent(entry.get('published'), hours):
                                 continue
                             
                             # Check if content is AI-related
