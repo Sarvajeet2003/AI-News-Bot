@@ -60,7 +60,12 @@ class AINewsScraper:
                 desc_elem = (item.find('description') or 
                            item.find('.//{http://www.w3.org/2005/Atom}summary') or
                            item.find('.//{http://www.w3.org/2005/Atom}content'))
-                entry['summary'] = desc_elem.text if desc_elem is not None else ''
+                if desc_elem is not None:
+                    # Clean HTML from summary
+                    summary_text = desc_elem.text if desc_elem.text else ''
+                    entry['summary'] = self.clean_html_content(summary_text)
+                else:
+                    entry['summary'] = ''
                 
                 # Get published date
                 pub_elem = (item.find('pubDate') or 
@@ -177,10 +182,15 @@ class AINewsScraper:
                             
                             self.seen_articles.add(article_id)
                             
+                            # Clean and limit summary
+                            summary = entry.get('summary', '')
+                            if len(summary) > 300:
+                                summary = summary[:300].rsplit(' ', 1)[0] + '...'
+                            
                             article = {
                                 'title': entry.get('title', 'No title'),
                                 'link': entry.get('link', ''),
-                                'summary': entry.get('summary', '')[:300] + '...' if len(entry.get('summary', '')) > 300 else entry.get('summary', ''),
+                                'summary': summary,
                                 'source': source_name,
                                 'published': entry.get('published', 'Unknown date')
                             }
@@ -206,24 +216,67 @@ class AINewsScraper:
         title = self.clean_html_text(article.get('title', 'No title'))
         summary = self.clean_html_text(article.get('summary', ''))
         
-        message = f"🤖 <b>{title}</b>\n\n"
-        message += f"📰 Source: {article.get('source', 'Unknown')}\n"
-        message += f"📅 Published: {article.get('published', 'Unknown date')}\n\n"
+        # Format source name nicely
+        source_name = article.get('source', 'Unknown').replace('_', ' ').title()
         
-        # Only add summary if it exists
-        if summary:
+        message = f"🤖 <b>{title}</b>\n\n"
+        message += f"📰 <i>{source_name}</i>\n"
+        
+        # Format date nicely
+        pub_date = article.get('published', 'Unknown date')
+        if pub_date != 'Unknown date':
+            try:
+                from dateutil import parser
+                parsed_date = parser.parse(pub_date)
+                formatted_date = parsed_date.strftime('%B %d, %Y at %I:%M %p')
+                message += f"📅 {formatted_date}\n\n"
+            except:
+                message += f"📅 {pub_date}\n\n"
+        else:
+            message += f"📅 {pub_date}\n\n"
+        
+        # Only add summary if it exists and is meaningful
+        if summary and len(summary.strip()) > 10:
+            # Limit summary length
+            if len(summary) > 200:
+                summary = summary[:200] + "..."
             message += f"📝 {summary}\n\n"
         
-        message += f"🔗 <a href=\"{article.get('link', '')}\">Read more</a>"
+        message += f"🔗 <a href=\"{article.get('link', '')}\">Read Full Article</a>"
         
         return message
+    
+    def clean_html_content(self, text):
+        """Remove HTML tags and clean content"""
+        if not text:
+            return ""
+        
+        # Use BeautifulSoup to remove HTML tags
+        soup = BeautifulSoup(text, 'html.parser')
+        
+        # Remove script and style elements
+        for script in soup(["script", "style", "figure", "img"]):
+            script.decompose()
+        
+        # Get text and clean it
+        clean_text = soup.get_text()
+        
+        # Clean up whitespace
+        lines = (line.strip() for line in clean_text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        clean_text = ' '.join(chunk for chunk in chunks if chunk)
+        
+        return clean_text
     
     def clean_html_text(self, text):
         """Clean text for Telegram HTML formatting"""
         if not text:
             return ""
         
-        # Escape HTML special characters
+        # First clean HTML content
+        text = self.clean_html_content(text)
+        
+        # Escape HTML special characters for Telegram
         text = text.replace('&', '&amp;')
         text = text.replace('<', '&lt;')
         text = text.replace('>', '&gt;')

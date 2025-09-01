@@ -13,32 +13,29 @@ A free Telegram bot that tracks the latest AI product releases, model launches, 
 
 ## Setup Instructions
 
-### 1. Create a Telegram Bot
-
-1. Message [@BotFather](https://t.me/botfather) on Telegram
-2. Send `/newbot` and follow the instructions
-3. Save your bot token
-
-### 2. Install Dependencies
+### 1. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Configure Environment
+### 2. Configure Environment
 
 1. Copy `.env.example` to `.env`
 2. Add your bot token:
 
 ```
-TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_BOT_TOKEN=7998385922:AAEDUeg-FVR1yl_sdHSTrmMj0c1t8pePbZw
 ```
 
-### 4. Run the Bot
+### 3. Run the Bot
 
 ```bash
 python telegram_bot.py
 ```
+### 4. Open Telegram 
+
+Search for @A_eye_bot in the search bar
 
 ## Bot Commands
 
